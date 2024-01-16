@@ -1,0 +1,49 @@
+---
+title: "snakemake"
+author: "Bingfang Ruth Xu"
+date: "2023-11-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Snakemake notes
+
+ target file can't be addible
+
+
+
+## Commendlines
+
+You can also embed plots, for example:
+
+```{}
+#lines working
+snakemake --dry-run check_target
+snakemake -np check_target
+snakemake check_target --cores 1
+snakemake -np
+snakemake -c 1
+
+conda install -c "conda-forge/label/broken" mamba
+
+#lines not working
+snakemake --dag targets | dot -Tpng > dag.png
+brew install graphviz. # don't know if it installed properly
+conda install -c conda-forge mamba
+mamba install -c conda-forge graphviz
+
+
+
+#line haven't test
+
+conda install -c "conda-forge/label/cf202003" mamba
+conda install -c "conda-forge/label/mamba-alpha" mamba
+sudo port install graphviz
+
+install -c conda-forge mamba
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

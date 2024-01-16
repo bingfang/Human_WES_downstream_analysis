@@ -1,0 +1,96 @@
+---
+title: "OpenCravat local run "
+author: "Bingfang Ruth Xu"
+date: "2023-12-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Where is cravat
+
+## If installed by pip, pip3, sudo pip
+
+/Users/xubr/anaconda3/bin/oc
+    /Users/xubr/anaconda3/lib/python3.11/site-packages/cravat/*
+    /Users/xubr/anaconda3/lib/python3.11/site-packages/open_cravat-2.4.2.dist-info/*
+    
+### If installed through a mac package
+
+  inside /Applications
+    
+### When open on website, it generates
+
+    /Users/Shared/open-cravat/
+    /Users/Shared/open-cravat/conf/cravat-system.yml
+After installation, need to restart computer
+
+## Commend lines    
+```{}
+
+pip install open-cravat. # worked
+pip3 install open-cravat
+sudo pip install open-cravat
+
+pip uninstall open-cravat
+
+oc gui
+oc module install-base. # need install in a network without proxy server.
+```
+
+
+error message form 2.2.9 package
+
+
+Traceback (most recent call last):
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/urllib3/connectionpool.py", line 703, in urlopen
+    httplib_response = self._make_request(
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/urllib3/connectionpool.py", line 386, in _make_request
+    self._validate_conn(conn)
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/urllib3/connectionpool.py", line 1042, in _validate_conn
+    conn.connect()
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/urllib3/connection.py", line 414, in connect
+    self.sock = ssl_wrap_socket(
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/urllib3/util/ssl_.py", line 449, in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/urllib3/util/ssl_.py", line 493, in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/ssl.py", line 513, in wrap_socket
+    return self.sslsocket_class._create(
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/ssl.py", line 1071, in _create
+    self.do_handshake()
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/ssl.py", line 1342, in do_handshake
+    self._sslobj.do_handshake()
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self signed certificate in certificate chain (_ssl.c:997)
+During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/requests/adapters.py", line 489, in send
+    resp = conn.urlopen(
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    retries = retries.increment(
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/urllib3/util/retry.py", line 592, in increment
+    raise MaxRetryError(_pool, url, error or ResponseError(cause))
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='store.opencravat.org', port=443): Max retries exceeded with url: /manifest-2.2.9.yml (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self signed certificate in certificate chain (_ssl.c:997)')))
+During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/cravat/webstore/webstore.py", line 108, in get_remote_manifest
+    content['data'] = au.get_remote_manifest()
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/cravat/admin_util.py", line 787, in get_remote_manifest
+    mic.update_remote()
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/cravat/admin_util.py", line 281, in update_remote
+    manifest_str = su.get_file_to_string(self._remote_url)
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/cravat/store_utils.py", line 196, in get_file_to_string
+    r = requests.get(url, timeout=(3, None))
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/requests/api.py", line 73, in get
+    return request("get", url, params=params, **kwargs)
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/requests/api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/requests/sessions.py", line 587, in request
+    resp = self.send(prep, **send_kwargs)
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/requests/sessions.py", line 701, in send
+    r = adapter.send(request, **kwargs)
+  File "/Applications/OpenCRAVAT.app/Contents/Resources/lib/python3.10/site-packages/requests/adapters.py", line 563, in send
+    raise SSLError(e, request=request)
+requests.exceptions.SSLError: HTTPSConnectionPool(host='store.opencravat.org', port=443): Max retries exceeded with url: /manifest-2.2.9.yml (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self signed certificate in certificate chain (_ssl.c:997)')))

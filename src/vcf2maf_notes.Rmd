@@ -1,0 +1,100 @@
+---
+title: "vcf2maf notes"
+author: "Bingfang Ruth Xu"
+date: "2023-08-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Prepare vcf file
+
+
+
+```{}
+# cd to vcf file
+cd /data/xubr/flagKnockin_0121/somatic_tumor_only/SNP_Indels/mutect2_out/vcf
+
+# remove "chr" from vcf file
+awk '{gsub(/^chr/,""); print}' your.vcf > no_chr.vcf
+
+
+```
+
+## Run vcf2maf
+
+Location of fasta file:
+/fdb/ensembl/pub/release-102/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa
+
+Location of test file:
+/usr/local/apps/vcf2maf/1.6.21/tests/test.vcf
+
+VEP path
+/usr/local/apps/VEP/102/bin
+
+VEP CACHEDIR
+/fdb/VEP/102/cache
+
+verbose
+ displays detailed processing information on your screen
+
+```{}
+# module load VEP/102 vcf2maf
+sinteractive --cpus-per-task=16
+module load VEP/102 vcf2maf
+
+
+vcf2maf.pl \
+  --input-vcf $VCF2MAF_EXAMPLES/test.vcf \
+  --output-maf test.maf \
+  --vep-path $VEP_HOME/bin \
+  --vep-data $VEP_CACHEDIR \
+  --ref-fasta $VEP_CACHEDIR/GRCh38.fa \
+  --ncbi-build GRCh38 \
+  --cache-version $VEP_VERSION \
+  --vep-forks $SLURM_CPUS_ON_NODE \
+  --verbose
+
+# works!
+
+vcf2maf.pl --input-vcf 1_SW1573_parental_S1.germline_no_chr.vcf --output-maf 1_SW1573_parental_S1.germline.vep.FINAL.maf --vep-path $VEP_HOME/bin --vep-data $VEP_CACHEDIR --ref-fasta $VEP_CACHEDIR/GRCh38.fa --ncbi-build GRCh38 --cache-version $VEP_VERSION --vep-forks $SLURM_CPUS_ON_NODE --verbose
+
+vcf2maf.pl --input-vcf 1_RPZ28949_S1.FINAL.noChr.vcf --output-maf 1_RPZ28949_S1.vep.FINAL.maf --vep-path $VEP_HOME/bin --vep-data $VEP_CACHEDIR --ref-fasta $VEP_CACHEDIR/GRCh38.fa --ncbi-build GRCh38 --cache-version $VEP_VERSION --vep-forks $SLURM_CPUS_ON_NODE --verbose
+
+# test run not working
+vcf2maf.pl --input-vcf $VCF2MAF_EXAMPLES/test.vcf --output-maf test.maf --vep-path $VEP_HOME/bin --vep-data $VEP_CACHEDIR --ref-fasta $VEP_CACHEDIR/GRCh38.fa --ncbi-build GRCh38 --cache-version $VEP_VERSION --vep-forks $SLURM_CPUS_ON_NODE --verbose
+
+
+```
+
+
+# Run multiple files
+
+```{}
+#!/usr/bin/bash
+
+# cd ./germline/VCF
+# check vcf file name and make changes
+#sinteractive --cpus-per-task=16
+
+module load VEP/102 vcf2maf
+
+for file in *.germline.vcf.gz;
+do
+    echo $file 
+    name=$(basename ${file} .germline.vcf.gz)
+    echo $name
+    
+    gunzip ${file}
+    
+    awk '{gsub(/^chr/,""); print}' ${name}.germline.vcf > ${name}.germline_no_chr.vcf
+    
+    vcf2maf.pl --input-vcf ${name}.germline_no_chr.vcf --output-maf ${name}.germline.vep.FINAL.maf --vep-path $VEP_HOME/bin --vep-data $VEP_CACHEDIR --ref-fasta $VEP_CACHEDIR/GRCh38.fa --ncbi-build GRCh38 --cache-version $VEP_VERSION --vep-forks $SLURM_CPUS_ON_NODE --verbose
+
+
+done
+
+```
+

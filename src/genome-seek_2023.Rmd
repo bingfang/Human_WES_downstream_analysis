@@ -1,0 +1,118 @@
+---
+title: "Genome-seek"
+author: "Bingfang Ruth Xu"
+date: "2023-09-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+## Fastq file preparation
+
+Use rename4pipeliner.sh to change file format to *R?.fastq.gz
+
+## Bed file selection
+
+If use v7 human bait, choose "Agilent_SSv7_allExons_hg38.bed".
+
+if use V8 human bait, choose "S33266340_Covered_hg38.bed".
+
+if use v5 mouse bait, choose "S0276129_ID_Regions_mm10.bed"
+
+## genome-seek run on biowulf
+
+```{}
+git clone https://github.com/OpenOmics/genome-seek.git
+sinteractive --mem=16g --cpus-per-task=8
+module load singularity snakemake	
+genome-seek run --input /data/xubr/AS_fastq/*.R?.fastq.gz --output /data/xubr/AS_0912  --open-cravat --mode slurm
+
+genome-seek run --input /data/xubr/AS_fastq/*.R?.fastq.gz --output /data/xubr/AS_0912  --open-cravat --mode slurm --pairs pairs.txt --call-somatic --call-cnv --call-sv --dry-run
+./genome-seek run --input /data/xubr/AS_fastq/*.R?.fastq.gz --output /data/xubr/AS_0913  --open-cravat --mode slurm --call-somatic --call-cnv --call-sv --dry-run
+```
+rule fastp:
+    Data-processing step to remove adapter sequences and perform quality trimming
+    prior to alignment the reference genome.  Adapters are composed of synthetic
+    sequences and should be removed prior to alignment. Fastp is much faster than
+    trimmomatic and cutadapt, and it will also auto-detect adapter sequences.
+ 
+
+
+
+
+
+
+
+
+```{)
+
+
+sinteractive --mem=110g --cpus-per-task=12 --gres=lscratch:200
+module load singularity snakemake
+./xavier run --input /data/xubr/AS_fastq/*.R?.fastq.gz --output /data/xubr/AS_0921 --genome hg38 --targets ./S33266340_Covered_hg38.bed  --pairs ./pairs.tsv --cnv --mode slurm --runmode init  (dryrun, run)
+
+./xavier run --input /data/xubr/AS_fastq/*.R?.fastq.gz --output /data/xubr/AS_0915 --genome hg38 --targets ./S33266340_Covered_hg38.bed  --pairs ./pairs.tsv --cnv --mode slurm --runmode init (dryrun, run)
+
+not working
+sinteractive --mem=16g --cpus-per-task=8. 
+module load singularity snakemake
+./xavier run --input /data/xubr/AS_fastq/*.R?.fastq.gz --output /data/xubr/AS_0919 --genome hg38 --targets ./S33266340_Covered_hg38.bed  --pairs ./pairs.tsv --cnv --mode slurm --runmode init (dryrun, run)
+## fail during a karen jobs
+
+not working
+
+
+
+# examples
+
+./xavier run --input /data/xubr/AS_fastq/*.R?.fastq.gz --output /data/xubr/AS_0915 --genome hg38 --targets ./S33266340_Covered_hg38.bed  --pairs ./pairs.tsv --cnv --mode slurm --runmode init (dryrun, run)
+
+
+
+./xavier run --input /data/xubr/fastq/*.R?.fastq.gz --output ../hLine_0810 --genome hg38 --targets ./S33266340_Covered_hg38.bed --pairs ./pairs.tsv --cnv --mode slurm --runmode init (dryrun, run)
+
+#### check bed file
+
+./xavier run --input /data/xubr/fastq_deep/*cat.R?.fastq.gz --output ../deepSeq_20230726 --genome hg38 --targets ./Agilent_SSv7_allExons_hg38.bed --pairs ./pairs.tsv --cnv --mode slurm --runmode init (dryrun, run)
+
+
+```
+
+## XAVIER pairs
+The delimited file contains two columns
+
+```
+Normal	Tumor
+CS_GT424EP28Naive_S8_cat	CS_GT424EP27_S6_cat
+CS_GT425Naive_S7_cat	CS_GT425A1EP_S5_cat
+EF_GT425Naive_S3_cat	EF_GT425A1EP_S1_cat
+EF_GT424EP28Naive_S4_cat	EF_GT424EP27_S2_cat
+
+Normal	Tumor
+1_SW1573_parental_S1	2_SW1573_9866_resist_S2
+1_SW1573_parental_S1	3_SW1573_3uMBBO-8520_S3
+2_MiaPaca_S2	4_MiaPaca_2_3uM_BBO11818_S4
+2_MiaPaca_S2	5_MiaPaca_2_3uM_9866_S5
+2_MiaPaca_S2	6_MiaPaca_2_3uM_8520_S6
+
+
+
+
+```
+
+## XAVIER unlock
+
+
+```
+./xavier unlock --output ../hLine_0810
+```
+## Notes
+
+Strelka only works when tumor paired with normal.
+https://hpc.nih.gov/apps/singularity.html
+https://hpc.nih.gov/training/handouts/singularity-20180726.pdf
+module load GATK/3.8-1

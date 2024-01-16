@@ -1,0 +1,106 @@
+---
+title: "PCGR_CPSR"
+author: "Bingfang Ruth Xu"
+date: "2023-12-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## download pcgr bundle
+
+```
+curl http://insilico.hpc.uio.no/pcgr/pcgr.databundle.grch38.20220203.tgz
+gzip -dc pcgr.databundle.grch38.20220203.tgz | tar xvf
+```
+
+## install mamba
+
+```
+conda update conda
+conda install mamba -n base -c conda-forge
+```
+
+## clone pcgr
+
+```
+git clone -b "v1.0.3" --depth 1 https://github.com/sigven/pcgr.git ./PCGR
+
+# curent version v1.2.0
+git remote -v
+origin	https://github.com/sigven/pcgr.git (fetch)
+origin	https://github.com/sigven/pcgr.git (push)
+```
+
+## docker command line for PCGR
+PCGR uses VCF or compressed VCF with indexed files
+```
+cd /Users/xubr/local_projects/master_PCGR/PCGR/pcgr
+
+#  zip vcf file
+bgzip ${file}
+    
+# index vcf
+tabix -p vcf ${file}.gz
+
+docker container run -it --rm -v /Users/xubr/local_projects/master_PCGR/PCGR/pcgr_data:/root/pcgr_data -v /Users/xubr/local_projects/master_PCGR/PCGR/pcgr_inputs:/root/pcgr_inputs -v /Users/xubr/local_projects/master_PCGR/PCGR/pcgr_outputs:/root/pcgr_outputs sigven/pcgr:1.0.3 pcgr --input_vcf "/root/pcgr_inputs/SB_19_4469_A1_S5_L001.FINAL.norm.vcf.gz" --pcgr_dir "/root/pcgr_data" --output_dir "/root/pcgr_outputs" --genome_assembly "grch38" --sample_id "SB_19_4469_A1" --assay "WES" --vcf2maf --no_docker
+```
+
+## docker bash script for PCGR
+
+```
+#!/usr/bin/bash
+
+
+cd /Users/xubr/local_projects/master_PCGR/PCGR/pcgr_inputs
+
+for file in *.FINAL.norm.vep.vcf;
+do
+    echo ${file}
+    name=$(basename ${file} .FINAL.norm.vep.vcf)
+    echo $name
+    
+    # zip vcf file
+    bgzip ${file}
+    
+    # index vcf
+    tabix -p vcf ${file}.gz
+    
+    #docker run
+    docker container run -it --rm -v /Users/xubr/local_projects/master_PCGR/PCGR/pcgr_data:/root/pcgr_data -v /Users/xubr/local_projects/master_PCGR/PCGR/pcgr_inputs:/root/pcgr_inputs -v /Users/xubr/local_projects/master_PCGR/PCGR/pcgr_outputs:/root/pcgr_outputs sigven/pcgr:1.1.0 pcgr --input_vcf "/root/pcgr_inputs/${file}.gz" --pcgr_dir "/root/pcgr_data" --output_dir "/root/pcgr_outputs" --genome_assembly "grch38" --sample_id "${name}" --assay "WES" --vcf2maf
+    
+done
+```
+
+## docker command line for cpsr
+CPSR expects a germline VCF with a single sample column, and input VCF is properly compressed and indexed
+
+```
+
+cd /Users/xubr/local_projects/master_PCGR/PCGR/pcgr
+
+docker container run -it --rm -v /Users/xubr/local_projects/master_PCGR/PCGR/pcgr_data:/root/pcgr_data -v /Users/xubr/local_projects/master_PCGR/PCGR/inputs:/root/inputs -v /Users/xubr/local_projects/master_PCGR/PCGR/outputs:/root/outputs sigven/pcgr:1.0.3 cpsr --input_vcf "/root/inputs/raw_variants.vcf.gz" --pcgr_dir "/root/pcgr_data" --output_dir "/root/outputs" --genome_assembly "grch38" --sample_id "germline" --panel_id 0 --no_docker 
+
+
+```
+
+## docker bash script for cpsr
+
+```
+
+#!/usr/bin/bash
+
+cd /Users/xubr/local_projects/master_PCGR/PCGR/inputs
+
+for file in *.germline.vcf.gz;
+do
+    echo $file 
+    name=$(basename ${file} .germline.vcf.gz)
+    echo $name
+    docker container run -it --rm -v /Users/xubr/local_projects/master_PCGR/PCGR/pcgr_data:/root/pcgr_data -v /Users/xubr/local_projects/master_PCGR/PCGR/inputs:/root/inputs -v /Users/xubr/local_projects/master_PCGR/PCGR/outputs:/root/outputs sigven/pcgr:1.0.3 cpsr --input_vcf "/root/inputs/${file}" --pcgr_dir "/root/pcgr_data" --output_dir "/root/outputs" --genome_assembly "grch38" --sample_id "${name}" --panel_id 0 --no_docker
+    
+done
+
+```

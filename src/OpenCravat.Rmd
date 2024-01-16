@@ -1,0 +1,84 @@
+---
+title: "Run Opencravat on biowulf and local"
+author: "Bingfang Ruth Xu"
+date: "2023-12-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Run Opencravat on biowulf
+
+```{}
+sinteractive  --mem=32g  --gres=gpu:p100:1,lscratch:10 -c4
+module load OpenCRAVAT
+
+#  1) annovar/2020-06-08   2) OpenCRAVAT 2.4.2
+
+cd /data/$USER
+mkdir OpenCRAVAT && cd OpenCRAVAT
+
+# available annotators
+oc module ls -a -t annotator
+
+# install module #### permission denied
+oc module install cosmic cosmic_gene clinvar_acmg civic civic_gene  cancer_hotspots 
+
+# --mp 1 ##### no annotators
+oc run  --mp 1 ./3_NCI_H358_S3.germline.vcf.gz -l hg38. 
+
+# run a subset of the annotators that are installed, use the -a option:
+oc run --mp 1 ./3_NCI_H358_S3.germline.vcf.gz -l hg38 -a clinvar clingen dbsnp polyphen2 -t text excel
+
+# mudule not installed yet
+oc run --mp 1 ./3_NCI_H358_S3.germline.vcf.gz -l hg38 -a cosmic cosmic_gene clinvar clinvar_acmg civic civic_gene clingen dbsnp polyphen2 -t text excel
+
+# tab delimited output use -t text or -t text excel for both
+oc run --mp 1 ./3_NCI_H358_S3.germline.vcf.gz -l hg38 -t text excel
+```
+
+Once the job is finished, the following files will be created:
+example_input.log
+
+example_input.sqlite
+
+example_input.err
+
+In particular, file example_input.sqlite is the sqlite database with the results. This sqlite database can be opened in the OpenCRAVAT web viewer as follows:
+
+## check results
+
+Not working at this moment because of SSL issues
+
+```{}
+# on biowulf
+oc gui example_input.sqlite
+
+# On your local system, open a new window and type:
+ssh -t -L 8080:localhost:8080 biowulf.nih.gov "ssh -L 8080:localhost:8080 cn2389"
+
+# Navigate a browser on your local system to the URL: localhost:8080
+```
+
+## run multiple vcf samples
+
+```{}
+# on biowulf
+
+
+#!/usr/bin/bash
+
+module load OpenCRAVAT
+
+for file in *.FINAL.norm.vep.vcf;
+do
+    echo ${file}
+    name=$(basename ${file} .FINAL.norm.vep.vcf)
+    echo $name
+    
+    oc run --mp 1 ./${file} -l hg38 -a clinvar clingen dbsnp polyphen2
+    
+done
+```

@@ -1,0 +1,85 @@
+---
+title: "Exome_seek"
+author: "Bingfang Ruth Xu"
+date: "2023-05-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Exome-seek documentation
+https://github.com/dnousome/CCBR_GATK4_Exome_Seq_Pipeline
+
+https://mtandon09.github.io/CCBR_GATK4_Exome_Seq_Pipeline/usage/run/
+
+## Exome-seek installation
+
+```
+# clone Repository from Github
+git clone https://github.com/dnousome/CCBR_GATK4_Exome_Seq_Pipeline
+# for update
+git pull
+# change your working directory
+cd CCBR_GATK4_Exome_Seq_Pipeline/
+```
+
+## Fastq file preparation
+
+Use rename4pipeliner.sh to change file format to *R?.fastq.gz
+
+## Bed file selection
+
+If use v7 human bait, choose "Agilent_SSv7_allExons_hg38.bed".
+
+if use V8 human bait, choose "S33266340_Covered_hg38.bed".
+
+if use v5 mouse bait, choose "S0276129_ID_Regions_mm10.bed"
+
+## Exome-seek run on biowulf
+
+```
+sinteractive --mem=16g --cpus-per-task=8	
+module purge	
+module load singularity snakemake	
+module list
+# version  2023/01/20
+[+] Loading singularity  3.10.5  on cn0872 
+[+] Loading snakemake  7.19.1 
+exome-seek v1.0.3-beta 2022/02/09
+
+
+# examples
+./exome-seek run --input /data/xubr/fastq_0210/*R?.fastq.gz --output ../MEF_0510 --genome mm10 --targets ./S0276129_ID_Regions_mm10.bed --pairs ./pairs.tsv --cnv --dry-run --mode slurm
+
+./exome-seek run --input /data/xubr/fastq_human/*R?.fastq.gz --output ../flagKnockin_0505 --genome hg38 --targets ./S33266340_Covered_hg38.bed --pairs ./pairs.tsv --cnv --dry-run --mode slurm
+
+./exome-seek run --input /data/xubr/fastq_0104/*R?.fastq.gz --output ../flagKnockin_0210 --genome hg38 --targets ./S33266340_Covered_hg38.bed --mode slurm	
+./exome-seek run --input .tests/*.R?.fastq.gz --output ./output_0308 --genome hg38 --targets ./Agilent_SSv7_allExons_hg38.bed --mode slurm --dry-run	
+./exome-seek run --input ../fastq/D202*R?.fastq.gz --output ../trio_0309 --genome hg38 --targets ./Agilent_SSv7_allExons_hg38.bed --mode slurm --dry-run	
+./exome-seek run --input /data/xubr/trio_0309/bams/final_bams/D202*_L001.bam --output ../trio_0310_somatic --genome hg38 --targets ./Agilent_SSv7_allExons_hg38.bed --mode slurm --pairs ./pairs.tsv --ffpe --cnv --dry-run
+```
+
+## Exome-seek pairs
+The delimited file contains two columns
+
+```
+Normal	Tumor
+D2022_S1_L001	D2025T_S4_L001
+D2025G_S3_L001	D2025T_S4_L001
+D2026_S5_L001	D2025T_S4_L001
+```
+
+## Exome-seek unlock
+https://mtandon09.github.io/CCBR_GATK4_Exome_Seq_Pipeline/usage/unlock/
+
+```
+./exome-seek unlock [-h] --output OUTPUT
+```
+## Notes
+
+Strelka only works when tumor paired with normal.
+https://hpc.nih.gov/apps/singularity.html
+https://hpc.nih.gov/training/handouts/singularity-20180726.pdf
+module load GATK/3.8-1

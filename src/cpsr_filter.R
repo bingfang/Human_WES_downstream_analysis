@@ -1,0 +1,148 @@
+
+
+
+library(tidyverse)
+#install.packages("officer")
+library(officer)  ## for report writing
+#install.packages("flextable")
+library(flextable)
+library(plyr)     ## for join function
+
+############# cpsr filter
+# input *.snvs_indels.tiers.tsv file
+# FINAL_CLASSIFICATION is "Pathogenic" or "VUS"
+
+data_files <- list.files("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V/Report/cpsr_outputs", pattern = "*.snvs_indels.tiers.tsv")  
+for (ff in data_files){
+  print(ff)
+  base <- str_split(ff, ".snvs" )
+  print(base[[1]][1])
+  maf <- read.delim(paste0("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V/Report/cpsr_outputs/",ff), header = TRUE, sep = "\t")
+  print(colnames(maf))
+  
+  narrow_maf <-  maf %>% select(`SYMBOL`,`VAR_ID`, `DBSNP`, `GENOTYPE`, `CLINVAR_CLASSIFICATION`, `CONSEQUENCE`,`PROTEIN_CHANGE`,`FINAL_CLASSIFICATION`)
+  colnames(narrow_maf)
+  short_maf <- narrow_maf %>%
+    filter(`FINAL_CLASSIFICATION`=="Pathogenic"|`FINAL_CLASSIFICATION`=="VUS") 
+  
+  ID <- str_split_fixed(short_maf$`VAR_ID`, "_",4)
+  colnames(ID) <- c("CHROM", "POS",	"REF","ALT")
+  germline_var <- cbind(short_maf,ID)
+  write.table(germline_var, paste0("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V/Report/cpsr_outputs/",base[[1]][1], "_filter.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+}
+
+############# PCGR_merged filter
+# input *.pcgr_acmg.grch38.snvs_indels.tiers.tsv
+# filter TIER_DESCRIPTION ="Variants of potential clinical significance"|`TIER_DESCRIPTION`=="Variants of uncertain significance"
+
+data_files <- list.files("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V/Report/pcgr_outputs/merged_outputs/", pattern = "*grch38.snvs_indels.tiers.tsv")  
+
+for (ff in data_files){
+  base <- str_split(ff, ".snvs" )
+  maf <- read.delim(paste0("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V/Report/pcgr_outputs/merged_outputs/",ff), header = TRUE, sep = "\t")
+  
+  narrow_maf <-  maf %>% select(`CHROM`, `POS`,	`REF`,`ALT`,`SYMBOL`,`GENOMIC_CHANGE`, `DBSNPRSID`, `CLINVAR_CLNSIG`, `CONSEQUENCE`,`PROTEIN_CHANGE`,`TIER_DESCRIPTION`)
+  colnames(narrow_maf)
+  short_maf <- narrow_maf %>%
+    filter(`TIER_DESCRIPTION`=="Variants of potential clinical significance"|`TIER_DESCRIPTION`=="Variants of uncertain significance") 
+  write.table(short_maf, paste0("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V/Report/pcgr_outputs/merged_outputs/",base[[1]][1], "_filter.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+} 
+
+############# merged_maf filter
+# input *.maf
+
+data_files <- list.files("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V/somatic_tumor_only_exome_seek/merged/maf/", pattern = "*.maf")  
+for (ff in data_files){
+  print(ff)
+  base <- str_split(ff, ".maf" )
+  print(base[[1]][1])
+  maf <- read.delim(paste0("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V/somatic_tumor_only_exome_seek/merged/maf/",ff), skip=1, header = TRUE, sep = "\t")
+  print(colnames(maf))
+  narrow_maf <-  maf %>% select(c(`Hugo_Symbol`,`Chromosome`, `Start_Position`, `Variant_Classification`,`Tumor_Sample_Barcode`,`HGVSp`,`t_depth`,`t_ref_count`,`t_alt_count`,`SIFT`,`IMPACT`,`VARIANT_CLASS`,`FILTER`))
+  narrow_maf$`HGVSp`=substring(narrow_maf$`HGVSp`, first=3)
+  short_maf <- narrow_maf %>%
+    filter(`IMPACT`=="HIGH"|`IMPACT`=="MODERATE") %>%
+    filter(!(grepl('tolerate',`SIFT`))) %>%
+    filter(`FILTER`=="PASS")%>%
+    mutate(AF=round((`t_alt_count`/`t_depth`), digits = 2)) %>%
+    filter(`AF`>0.2 & t_depth > 30) %>%
+    mutate(HGVSp=if_else(HGVSp=='',"Splicing variant", HGVSp)) %>%
+    mutate(CLASS=case_when(AF > 0.9 | AF == 0.9 ~ "I-A",
+                           AF > 0.2 & AF < 0.9 & `IMPACT`=="HIGH" ~ "I-B",
+                           AF > 0.2 & AF < 0.9 & `IMPACT`=="MODERATE" ~ "II-A")) %>%
+    mutate(CLASS=if_else(str_detect(HGVSp,"(Ala[0-9]*Gly$)|(Gly[0-9]*Ala$)|(Ser[0-9]*Thr$)|(Thr[0-9]*Ser$)|(Ile[0-9]*Leu$)|(Leu[0-9]*Ile$)"),"II-B", CLASS)) %>%
+    arrange(`IMPACT`,`Hugo_Symbol`,`Chromosome`, `Start_Position`)
+
+  write.table(short_maf, paste0("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V/somatic_tumor_only_exome_seek/merged/maf/",base[[1]][1], "_filter.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+ 
+}
+
+
+######## merge
+setwd("~/workFromHome/20221223_3XFLAG_SW_G12V/Report/merge")
+
+data_files <- list.files("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V/Report/merge/", pattern = "*.cpsr.grch38_filter.txt")  
+for (ff in data_files){
+  print(ff)
+  base <- str_split(ff, ".cpsr.grch38_filter.txt" )
+  print(paste0("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V/Report/merge/",base[[1]][1],".cpsr.grch38_filter.txt"))
+  ## read in data
+  cpsr_class345 <- read.delim(paste0("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V/Report/merge/",base[[1]][1],".cpsr.grch38_filter.txt"),header = TRUE, sep = "\t")
+  pcgr_Tie345 <- read.delim(paste0("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V/Report/merge/",base[[1]][1],".pcgr_acmg.grch38_filter.txt"),header = TRUE, sep = "\t") 
+
+  sometic_5caller <- read.delim(paste0("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V/somatic_tumor_only_exome_seek/merged/maf/",base[[1]][1],".maf"), skip=1, header = TRUE, sep = "\t")
+
+  narrow_maf <-  sometic_5caller %>% select(c(`Hugo_Symbol`,`Chromosome`,`Start_Position`, `Reference_Allele`, `Tumor_Seq_Allele1`, `Tumor_Seq_Allele2`,`Variant_Classification`,`Tumor_Sample_Barcode`,`HGVSp`,`t_depth`,`t_ref_count`,`t_alt_count`,`SIFT`,`IMPACT`,`VARIANT_CLASS`,`FILTER`))
+  narrow_maf <-narrow_maf %>% mutate(ID=str_c(`Chromosome`,"_",`Start_Position`))
+  short_maf <- narrow_maf %>%
+    filter(`IMPACT`=="HIGH"|`IMPACT`=="MODERATE") %>%
+    filter(!(grepl('tolerate',`SIFT`))) %>%
+    filter(`FILTER`=="PASS") %>%
+    mutate(AF=round((`t_alt_count`/`t_depth`), digits = 2)) %>%
+    filter(`AF`>0.2 & t_depth > 30) %>%
+    mutate(HGVSp=if_else(HGVSp=='',"Splicing variant", HGVSp))
+
+
+  # get the same format of ID
+  cpsr_class345 <- cpsr_class345 %>% mutate(ID=str_c("chr",`CHROM`,"_",`POS`))
+  pcgr_Tie345 <- pcgr_Tie345 %>% mutate(ID=str_c("chr",`CHROM`,"_",`POS`))
+
+
+  # merge or join
+ 
+  somatic <- join(short_maf,pcgr_Tie345,type = "left", by="ID",match = "all")
+  somatic <- somatic %>% select(-c(`CHROM`,	`POS`,	`REF`,	`ALT`,	`SYMBOL`,	`GENOMIC_CHANGE`,	`CONSEQUENCE`,	`PROTEIN_CHANGE`,`FILTER`))
+  somatic_germline <- merge(somatic, cpsr_class345, by="ID", all="TRUE")
+  # write the output
+  somatic_germline_merge <- somatic_germline %>% 
+  mutate(Gene=ifelse(is.na(Hugo_Symbol), `SYMBOL`, `Hugo_Symbol`)) %>% 
+  mutate(Chrome=ifelse(is.na(Hugo_Symbol), `CHROM`, `Chromosome`)) %>% 
+  mutate(Pos=ifelse(is.na(Hugo_Symbol), `POS`, `Start_Position`)) %>% 
+  mutate(Ref=ifelse(is.na(Hugo_Symbol), `REF`, `Tumor_Seq_Allele1`)) %>% 
+  mutate(Alt=ifelse(is.na(Hugo_Symbol), `ALT`, `Tumor_Seq_Allele2`)) %>% 
+  mutate(DBsnp=ifelse(is.na(Hugo_Symbol), `DBSNP`, `DBSNPRSID`)) %>% 
+  mutate(Hgvsp=ifelse(is.na(Hugo_Symbol), `PROTEIN_CHANGE`, `HGVSp` )) %>% 
+  mutate(CLINVAR=ifelse(is.na(Hugo_Symbol), `CLINVAR_CLASSIFICATION`, `CLINVAR_CLNSIG`)) %>%
+  mutate(Consequence=ifelse(is.na(Hugo_Symbol), `CONSEQUENCE`, `Variant_Classification`)) %>%
+  mutate(Af=ifelse(is.na(Hugo_Symbol), `GENOTYPE`, `AF`)) %>%
+  mutate(Class=paste0(`FINAL_CLASSIFICATION`,',',`TIER_DESCRIPTION`))
+  Final <- somatic_germline_merge   %>% select(c(`Gene`,`Chrome`,`Pos`,`Ref`,`Alt`,`DBsnp`,`Hgvsp`, `t_depth`,`t_ref_count`,`t_alt_count`,`Consequence`,`Tumor_Sample_Barcode`,`Af`,`SIFT`,`IMPACT`,`VARIANT_CLASS`,`Class`)) %>%
+         
+         mutate(Class=factor(Class, levels=c("Pathogenic,Variants of potential clinical significance","Pathogenic,Variants of uncertain significance","Pathogenic,NA","VUS,Variants of uncertain significance", "VUS,NA","NA,Variants of uncertain significance","NA,NA")))%>%
+         arrange(`Class`,`IMPACT`, `Gene`) 
+  Uni <- unique(Final[ , c('Gene','Chrome','Pos','Hgvsp','Af','IMPACT','Consequence','Class') ] )
+  write.table(Final, paste0("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V//Report/merge/",base[[1]][1],".merge_annotated.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+
+  write.table(Uni, paste0("/Users/xubr/workFromHome/20221223_3XFLAG_SW_G12V//Report/merge/",base[[1]][1],".merge_annotated_8column.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+}
+
+
+x <- Final %>% count("Class") 
+
+
+
+
+
+
+
+

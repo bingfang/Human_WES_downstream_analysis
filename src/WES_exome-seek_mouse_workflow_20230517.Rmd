@@ -1,0 +1,243 @@
+---
+title: "WES exome-seek workflow with mouse samples"
+author: "Bingfang Xu"
+date: "5/10/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Sample information
+
+Use 12_RPZ0113 (Highseq, Jan, 2019) or 1_RPZ27911 (Novaseq, sep,2020) as normal.
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+
+library(tidyverse)
+
+samples <-  read_tsv("pairs.txt") 
+knitr::kable(samples)
+```
+
+Secondary analysis was performed using exome seek pipeline on Biowulf
+
+Exome-seek documentation
+https://github.com/dnousome/CCBR_GATK4_Exome_Seq_Pipeline
+
+https://mtandon09.github.io/CCBR_GATK4_Exome_Seq_Pipeline/usage/run/
+
+
+# Exome-seek Muteck2 somatic calling
+
+### VCF to VEP on Biowulf 
+```
+# copy multiple_Vcf2Vep_mouse.sh to mutect2_out folder.
+cp /data/xubr/useful_sh/multiple_Vcf2Vep_mouse.sh /data/xubr/${MEF_folder}/mutect2_out/
+
+# make changes on file name
+nano multiple_Vcf2Vep_mouse.sh
+
+# run VEP
+sinteractive --mem 32g
+bash multiple_Vcf2Vep_mouse.sh
+exit
+
+# move vep files to local.
+```
+
+###  Generate variant lists of somatic calling
+```
+### check vcf FORMAT, make changes in _2Vep_extractInfo_somaticList.py and _4single_clone_output.py 
+### check the number of sample field
+### check sample names, make changes of clone name if needed.
+### input files:*.FINAL.norm.vep.vcf
+### Filter by AF and DP.
+### Extract information of gene name, AF, MUTATION, Amino acid change
+### Combined individul vep file into one file: somatic_high_moderate.txt
+### Generate individual file: $sample_somatic_annotated.txt
+./scipts/_1somatic.bat
+python3 _2Vep_extractInfo_somaticList.py
+python3 _4single_clone_output.py
+
+```
+
+# Exome-seek GATK4 germline calling
+
+Use  snp_indel.filtered.vcf.gz as input.
+
+### Filter variants of germline calling, then VCF to VEP on Biowulf.
+
+```
+### Remove common mouse germline SNPs on biowulf
+sinteractive --mem 32g
+module load GATK/3.8-1 # current vertion GATK/4.2
+java -Xmx8g -jar $GATK_JAR -T SelectVariants -R /data/xubr/mm10_ordered_all.fa -V /data/xubr/snp_indel.filtered.vcf.gz --discordance /data/xubr/sorted2_mgp.v4.all.dbSNP_Sample_129S5SvEvBrd.vcf -o joint_noncommonSNP.vcf -U ALLOW_SEQ_DICT_INCOMPATIBILITY
+
+### Remove variants already existed in RPZ113 using data from three PRZ113 sequencing(200ngRPZ113, 3ngRPZ113, and RPZ0113)
+java -Xmx8g -jar $GATK_JAR -T SelectVariants -R /data/xubr/mm10_ordered_all.fa -V /data/xubr/joint_noncommonSNP.vcf --discordance /data/xubr/combined_GATK_3RPZ113.vcf -o /data/xubr/joint_noncommonSNP_nonRPZ113.vcf -U ALLOW_SEQ_DICT_INCOMPATIBILITY
+
+### Remove non-exon variants
+java -Xmx8g -jar $GATK_JAR -T SelectVariants -R mm10_ordered_all.fa -L S0276129_Regions_mm10.bed --variant joint_noncommonSNP_nonRPZ113.vcf -o Ontarget_joint_noncommonSNP_nonRPZ113.vcf
+
+### VCF to VEP (optional)
+module load VEP/100
+vep -i ./Ontarget_joint_noncommonSNP_nonRPZ113.vcf -o Ontarget_joint_noncommonSNP_nonRPZ113_vep.txt --offline --cache --dir_cache $VEP_CACHEDIR --species mouse --fasta $VEP_CACHEDIR/mouse.fa --everything --af_exac --vcf
+
+exit
+
+### move files (vcf and vef files) to local.
+```
+
+### Generate variant lists of germline calling
+
+```
+### Filter by impact (high, moderate and deleterious), AF>0.2, and DP>30. 
+### Extract information of AF, IMPACT, MUTATION, Amino acid change. 
+### Remove a list of misaligned genes. 
+### Sort variants by gene name.
+python ./scripts/_1filter_VEP_gemlineList.py
+
+```
+
+# Combine variants from germline and somatic calling
+
+```
+### input two files: "germline_total.txt" and "somatic_high_moderate.txt"
+### Add a "caller" column to annotate the methods which call the variant (germline, somatic, or both) 
+### Add "sample_name" column.
+### Add 3 column: "Notes", "Add_to_somatic_list","Remove_from_somatic_list"    
+./_2preIGV.bat
+python3 _2compare_marked.py
+python3 _3addSampleName.py 
+
+#########################################
+########### Manually IGV check.##########
+
+### 1. Generate a summary excel file.Remove variants without PASS
+### 2. Remove somatic variants which also found in germline calling (labeled as "Both" in somatic format and marked "remove" in column AC).
+### 3. Do IGV check manually. Sort by column AB. Focus on varaints with flag "check".
+### 4. Save as a txt file "IGV_Final.txt", choose tab delimited.
+
+#########################################
+
+### Add real germline variants to somatic list for individual samples.
+### Mark and remove false somatic variants with "remove".
+### Recalculate AF for the variants from germline calling.
+### Define class
+./_3postIGV.bat
+python3 _5add_minus_additional.py
+python3 _6defineClass.py 
+python3 _7remove_FalseSomatic.py
+
+### Munually check the final files focusing on variants marked with check in Class
+```
+
+# Write report
+
+
+
+```{}
+library(tidyverse)
+#install.packages("officer")
+library(officer)
+#install.packages("flextable")
+library(flextable)
+library(dplyr)
+setwd("/Users/xubr/local_projects/20230208_10MEF/1st2nd_runs/somatic_exomeSeek/mutect2_out/")
+data_files <- list.files("/Users/xubr/local_projects/20230208_10MEF/1st2nd_runs/somatic_exomeSeek/mutect2_out/", pattern = "*_annotated_additional_Final_fixed_IGV.txt")  
+
+for (ff in data_files) {
+  base <- str_split(ff, "_somatic" )
+  print(base)
+  
+  maf_temp <- read.delim(paste0("/Users/xubr/local_projects/20230208_10MEF/1st2nd_runs/somatic_exomeSeek/mutect2_out/",ff), header = FALSE, sep = "\t") %>% select(-c(`V7`,`V8`,`V9`,`V10`,`V11`,`V12`,`V18`,`V19`,`V20`,`V21`,`V22`,`V23`,`V24`,`V25`)) %>% filter(`V1`!="not")
+  colnames(maf_temp) <-maf_temp[1,]
+  
+  maf_temp<-maf_temp[-c(1),] 
+  maf_temp<-maf_temp %>% mutate(`VARIANT`=ifelse((nchar(maf_temp$`REF`)==1 & nchar(maf_temp$`ALT`)==1), "SNV", "INDEL"))
+  colnames(maf_temp)
+  # obtain sample name, file name, date
+  sample_name <- base[[1]][1]
+  print(sample_name)
+  file_name=paste0(base[[1]][1],".docx",collapse ="")
+  
+  today <- Sys.Date()
+  format(today, format="%B %d %Y")
+  print(today)
+  # open an empty docx file, write sample name
+  doc = read_docx()
+  prop1=fp_text(font.size = 12, bold = TRUE, font.family = "Times")
+  title1=fpar(ftext(paste0(sample_name,"-D001.3"), prop=prop1))
+  body_add_fpar(doc, title1)
+  
+  # write subtitle and date
+  body_add_par(doc, "Whole Exome report ")
+  body_add_par(doc, today)
+  body_add_par(doc, " ")
+  
+  # write method summary
+  body_add_par(doc, "Method Summary: ")
+  body_add_par(doc, "DNA was extracted using Qiagen all prep protocol. gDNA libraries from 500ng DNA was prepared and exons were captured using Agilent SureselectXT mouse all exon protocol. Libraries were quantitated via Agilent TapeStation. Sequencing was performed on the NextSeq2000. Raw FastQ files were mapped using the exome-seek protocols for mutation detection. Single Nucleotide variants and insertions or deletions were identified, and a subset of calls filtered by quality, depth of coverage, and allele frequency were compiled into a variant list. A subset of the compiled variants was reviewed manually using the Integrated Genome Viewer software from the Broad Institute. ")
+  body_add_par(doc, " ")
+  
+  body_add_par(doc, "FastQ and BAM files are stored at smb://fssrgd-is05p.ncifcrf.gov/ras-intl/static/Genomics/20230225_10samples_diploidMEF") 
+  body_add_par(doc, " ")
+  
+  # insert a table
+  body_add_par(doc, "Summary of findings: ")
+  count_impact <- maf_temp %>% dplyr::count(IMPACT,VARIANT) 
+  
+  
+  f.table=qflextable(count_impact)
+  f.table=font(f.table,  fontname = "Times", part = "all")
+  f.table=fontsize(f.table, size = 10, part = "all")
+  doc <- flextable::body_add_flextable(doc, value = f.table, align = "left" )
+  body_add_par(doc, " ")
+  
+  
+  
+  
+  # insert gene list
+  body_add_par(doc, "Gene list: ")
+  maf1 <- maf_temp %>% select(c(`GENE`,`#CHROM`,`POS`,`AF`,`IMPACT`,`AMINO ACID CHANGE`,`CLASS`))
+  f.table=qflextable(maf1)
+  set_table_properties(f.table, width = .5, layout = "autofit")
+  f.table=font(f.table,  fontname = "Times", part = "all")
+  f.table=fontsize(f.table, size = 10, part = "all")
+  # also set the table's header font as bold
+  f.table=bold(f.table, part = "header")
+  doc <- flextable::body_add_flextable(doc, 
+                                       value = f.table, 
+                                       align = "center" )
+  body_add_par(doc, " ")
+  body_add_par(doc, " ")
+  body_add_par(doc, "I-A    Mutation call is well supported and there is a high probability that the variant will impact RAS dependent proliferation in this cell (e.g. Homozygous mutation of Trp53).")
+  body_add_par(doc, " ")
+  body_add_par(doc, "Variants called by one of variant calling methods and visualized by IGV. Single variant on a gene, AF>0.9 with high impact. Or multiple variants on a gene, 0.9>AF>0.2 with high impact.")
+  body_add_par(doc, " ")
+  body_add_par(doc, "Variants called by one of variant calling methods and visualized by IGV. Single variant on a gene, AF>0.9 with moderate impact. Or multiple variants on a gene, 0.9>AF>0.2 with moderate impact.")
+  body_add_par(doc, " ")
+  body_add_par(doc, "I-B    Mutation call is well supported, the variant is probably damaging, the variant may impact cell growth or genetic stability.")
+  body_add_par(doc, " ")
+  body_add_par(doc, "Variants called by one of variant calling methods and visualized by IGV. Single variant on a gene, 0.9>AF>0.2 with high impact. ")
+  body_add_par(doc, " ")
+  body_add_par(doc, " II-A    Call is well supported, variant is non-synonymous and likely impact protein function.") 
+  body_add_par(doc, " ")               
+  body_add_par(doc, "Variants called by one of variant calling methods and visualized by IGV. Single variant on a gene, 0.9>AF>0.2 with moderate impact.") 
+  body_add_par(doc, " ")
+  body_add_par(doc, "II-B    Call is well supported, non-synonymous change in amino acids with minor change in amino acid properties (e.g.  Serine to Threonine, Ile to Leu, or Glycine to Alanine) that may alter protein function.")
+  body_add_par(doc, " ")
+  body_add_par(doc, "Variants called by one of variant calling methods and visualized by IGV. Single variant on a gene, AF>0.2 with moderate impact and with minor change in amino acid properties (e.g.  Serine to Threonine, Ile to Leu, or Glycine to Alanine). ")
+  body_add_par(doc, " ")
+  body_add_par(doc, "II-C    Mutation call is well supported but the change is unlikely to impact protein function.")
+  
+  
+  # output docx file
+  print(doc, target=file_name)
+  
+}
+  
+  
+```

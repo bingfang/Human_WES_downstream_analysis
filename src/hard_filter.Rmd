@@ -1,0 +1,49 @@
+---
+title: "Hard filering"
+author: "Bingfang Ruth Xu"
+date: "2023-03-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Load module
+
+```{}
+sinteractive --mem=32g
+module load GATK
+[+] Loading singularity  3.10.5  on cn0865 
+[+] Loading GATK  4.3.0.0 
+###03022023
+```
+
+### Subset to SNPs-only and indels-only callset with SelectVariants
+
+```{}
+gatk --java-options "-Xmx24g -Xms24g" SelectVariants -V raw_variants.vcf.gz -select-type SNP -O snps.vcf.gz
+
+gatk --java-options "-Xmx24g -Xms24g" SelectVariants -V raw_variants.vcf.gz -select-type INDEL -O indels.vcf.gz
+```
+
+### Hard-filter SNPs on multiple expressions using VariantFiltration
+
+```{}
+gatk VariantFiltration -V snps.vcf.gz -filter "QD < 2.0" --filter-name "QD2" -filter "QUAL < 30.0" --filter-name "QUAL30" -filter "SOR > 3.0" --filter-name "SOR3" -filter "FS > 60.0" --filter-name "FS60" -filter "MQ < 40.0" --filter-name "MQ40" -filter "MQRankSum < -12.5" --filter-name "MQRankSum-12.5"  -filter "ReadPosRankSum < -8.0" --filter-name "ReadPosRankSum-8" -O snps_filtered.vcf.gz
+```
+
+### Hard-filter indels on multiple expressions using VariantFiltration
+
+```{}
+gatk VariantFiltration -V indels.vcf.gz -filter "QD < 2.0" --filter-name "QD2" -filter "QUAL < 30.0" --filter-name "QUAL30"  -filter "FS > 200.0" --filter-name "FS200" -filter "ReadPosRankSum < -20.0" --filter-name "ReadPosRankSum-20" -O indels_filtered.vcf.gz
+```  
+
+### Combined SNPs and indel
+
+```{}
+module load bcftools
+[+] Loading samtools 1.17  ... 
+bcftools merge snps_filtered.vcf.gz indels_filtered.vcf.gz -Oz -o merged_hardfiltered.vcf.gz --force-samples
+tabix merged_hardfiltered.vcf.gz
+```

@@ -1,0 +1,106 @@
+---
+title: "XAVIER"
+author: "Bingfang Ruth Xu"
+date: "2023-10-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## XAVIER documentation
+https://github.com/CCBR/XAVIER.git
+
+https://ccbr.github.io/XAVIER/usage/run/
+
+## XAVIER installation
+
+```
+# clone Repository from Github
+git clone https://github.com/CCBR/XAVIER.git
+# for update
+git pull
+# change your working directory
+cd XAVIER/
+# check remote
+git remote -v
+```
+
+## Fastq file preparation
+
+Use rename4pipeliner.sh to change file format to *R?.fastq.gz
+
+## Bed file selection
+
+If use v7 human bait, choose "Agilent_SSv7_allExons_hg38.bed".
+
+if use V8 human bait, choose "S33266340_Covered_hg38.bed".
+
+if use v5 mouse bait, choose "S0276129_ID_Regions_mm10.bed"
+
+## XAVIER run on biowulf
+
+```
+sinteractive --mem=16g --cpus-per-task=8	
+module purge
+module list
+module load singularity snakemake	
+## module load ccbrpipeliner
+# version  2023/01/20
+[+] Loading singularity  4.0.1
+[+] Loading snakemake  7.32.3
+xavier (v2.0)
+
+
+# examples
+
+./xavier run --input /data/xubr/fastq_parental/*.R?.fastq.gz --output /data/xubr/out_parental_1221 --genome hg38 --targets ./S33266340_Covered_hg38.bed --mode slurm --runmode init (dryrun, run)
+
+./xavier run --input /data/xubr/fastq_res/*.R?.fastq.gz --output /data/xubr/Res_1108 --genome hg38 --targets ./S33266340_Covered_hg38.bed  --pairs /data/xubr/XAVIER/pairs.tsv --cnv --mode slurm --runmode init (dryrun, run)
+
+./xavier run --input /data/xubr/fastq_parental/*.R?.fastq.gz --output /data/xubr/parental_1127 --genome hg38 --targets ./S33266340_Covered_hg38.bed --mode slurm --runmode init (dryrun, run)
+
+./xavier run --input /data/xubr/fastq/*.R?.fastq.gz --output ../hLine_0810 --genome hg38 --targets ./S33266340_Covered_hg38.bed --pairs ./pairs.tsv --cnv --mode slurm --runmode init (dryrun, run)
+
+#### check bed file
+
+./xavier run --input /data/xubr/fastq_deep/*cat.R?.fastq.gz --output ../deepSeq_20230726 --genome hg38 --targets ./Agilent_SSv7_allExons_hg38.bed --pairs ./pairs.tsv --cnv --mode slurm --runmode init (dryrun, run)
+
+
+```
+
+## XAVIER pairs
+The delimited file contains two columns
+
+```
+Normal	Tumor
+CS_GT424EP28Naive_S8_cat	CS_GT424EP27_S6_cat
+CS_GT425Naive_S7_cat	CS_GT425A1EP_S5_cat
+EF_GT425Naive_S3_cat	EF_GT425A1EP_S1_cat
+EF_GT424EP28Naive_S4_cat	EF_GT424EP27_S2_cat
+
+Normal	Tumor
+1_SW1573_parental_S1	2_SW1573_9866_resist_S2
+1_SW1573_parental_S1	3_SW1573_3uMBBO-8520_S3
+2_MiaPaca_S2	4_MiaPaca_2_3uM_BBO11818_S4
+2_MiaPaca_S2	5_MiaPaca_2_3uM_9866_S5
+2_MiaPaca_S2	6_MiaPaca_2_3uM_8520_S6
+
+
+
+
+```
+
+## XAVIER unlock
+
+
+```
+./XAVIER unlock [-h] --output OUTPUT
+```
+## Notes
+
+Strelka only works when tumor paired with normal.
+https://hpc.nih.gov/apps/singularity.html
+https://hpc.nih.gov/training/handouts/singularity-20180726.pdf
+module load GATK/3.8-1

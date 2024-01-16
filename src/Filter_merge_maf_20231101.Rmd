@@ -1,0 +1,386 @@
+---
+title: "WES analysis of human parental cell lines"
+author: "Bingfang Ruth Xu"
+date: "2023-12-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+ 
+
+```{r,echo=FALSE, warning=FALSE, message=FALSE }
+## Libraries
+library(tidyverse)
+#install.packages("officer")
+library(officer)  ## for report writing
+#install.packages("flextable")
+library(flextable)
+library(plyr)     ## for join function
+#install.packages("readxl")
+library("readxl")
+```
+## Workflow
+
+DNA was extracted using Qiagen all prep protocol. gDNA libraries from 200ng DNA was prepared and exons were captured using Agilent SureselectXT human all exon V8 protocol. Libraries were quantitated via Agilent TapeStation. Sequencing was performed on the Illumina NextSeq2000. Raw FastQ files were mapped using the Xavier 3.0 protocols for mutation detection. 
+
+For somatic tumor-normal pair analysis, single nucleotide variants (SNVs) and insertions or deletions (Indels) were identified by 5 callers including mutect, mutect2, strelka, verdict, and varson. The merged SNVs and Indels from 5 callers were annotated by pcgr and vep. Variants were classified based on pcgr and vep annotation. For class1-4, AF set as greater than 5%. For class 5 variants AF set as greater than 15%.
+
+For germline analysis, SNVs and Indels were identified by GATK4 and annotated by cpsr. 
+
+The compiled variants was reviewed manually using the Integrated Genome Viewer software from the Broad Institute. Variant artifacts were removed, and classification were adjusted.
+
+
+
+## pcgr filter
+
+ Input files: *.snvs_indels.tiers.tsv. 
+ 
+ pcgr run needs >1h for each sample
+
+```{}
+data_files <- list.files("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/pcgr_outputs/", pattern = "*.snvs_indels.tiers.tsv")  
+
+for (ff in data_files){
+  print(ff)
+  base <- str_split(ff, ".snvs" )
+  print(base[[1]][1])
+  maf <- read.delim(paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/pcgr_outputs/",ff), header = TRUE, sep = "\t")
+  print(colnames(maf))
+  
+  
+  narrow_maf <-  maf %>% select(`SYMBOL`,`CHROM`, `POS`, `REF`, `ALT`, `DBSNPRSID`, `GLOBAL_AF_1KG`, `CLINVAR_CLNSIG`, `CONSEQUENCE`,`PROTEIN_CHANGE`,`TIER`,`TIER_DESCRIPTION`)
+  colnames(narrow_maf)
+  ## short_maf <- narrow_maf %>%
+  ## filter(`TIER`== "TIER 1" |`TIER`=="TIER 2"|`TIER`=="TIER 3") 
+
+  write.table(narrow_maf, paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/pcgr_outputs/",base[[1]][1], "_nofilter.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+  
+}
+
+```
+
+## cpsr filter
+ input files:*.snvs_indels.tiers.tsv file
+ select "Pathogenic" or "Likely_Pathogenic" or "VUS" in FINAL_CLASSIFICATION, which are class5,4,3 in cpsr
+ select "Pathogenic" or "Likely_Pathogenic" in FINAL_CLASSIFICATION, which are class5,4 in cpsr
+```{}
+data_files <- list.files("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/CPSR_outputs/", pattern = "*.snvs_indels.tiers.tsv")  
+
+for (ff in data_files){
+  print(ff)
+  base <- str_split(ff, ".snvs" )
+  print(base[[1]][1])
+  maf <- read.delim(paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/CPSR_outputs/",ff), header = TRUE, sep = "\t")
+  print(colnames(maf))
+  
+  narrow_maf <-  maf %>% select(`SYMBOL`,`VAR_ID`, `DBSNP`, `GENOTYPE`, `CLINVAR_CLASSIFICATION`, `CONSEQUENCE`,`PROTEIN_CHANGE`,`FINAL_CLASSIFICATION`)
+  colnames(narrow_maf)
+  short_maf <- narrow_maf %>%
+  filter(`FINAL_CLASSIFICATION`=="Pathogenic"|`FINAL_CLASSIFICATION`=='Likely_Pathogenic') 
+  
+  ID <- str_split_fixed(short_maf$`VAR_ID`, "_",4)
+  colnames(ID) <- c("CHROM", "POS",	"REF","ALT")
+  germline_var <- cbind(short_maf,ID)
+  write.table(germline_var, paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/CPSR_outputs/",base[[1]][1], "_filter.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+}
+```
+
+
+
+## maf filter
+  input *.maf
+  input from somatic_tumor_only/merged_somatic_variants/maf
+  selected PASS, High or moderate variants, calculated AF
+
+```{}
+data_files <- list.files("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/maf/", pattern = "*.maf")  
+for (ff in data_files){
+  print(ff)
+  base <- str_split(ff, ".maf" )
+  print(base[[1]][1])
+  
+  maf <- read.delim(paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/maf/",ff), skip=1, header = TRUE, sep = "\t")
+  print(colnames(maf))
+  
+  # no filter, calculated AF
+  narrow_maf <-  maf %>% select(c(`Hugo_Symbol`,`Chromosome`, `Start_Position`, `Variant_Classification`,`Tumor_Sample_Barcode`,`HGVSp`,`t_depth`,`t_ref_count`,`t_alt_count`,`SIFT`,`IMPACT`,`VARIANT_CLASS`,`FILTER`, `set`))%>% 
+  mutate(AF=round((`t_alt_count`/`t_depth`), digits = 2)) 
+  narrow_maf$`HGVSp`=substring(narrow_maf$`HGVSp`, first=3) 
+  
+  # relax filter: selected PASS, High or moderate variants, AF>0.05, DP>30
+  short_maf <- narrow_maf %>%
+    filter(`IMPACT`=="HIGH"|`IMPACT`=="MODERATE") %>%
+    #filter(!(grepl('tolerate',`SIFT`))) %>%
+    filter(`FILTER`=="PASS")%>%
+    filter(`AF`> 0.049999 & t_depth > 30) %>%
+    #mutate(HGVSp=if_else(HGVSp=='',"Splicing variant", HGVSp)) %>%
+    #mutate(CLASS=case_when(AF > 0.9 | AF == 0.9 ~ "I-A",
+    #                       AF > 0.2 & AF < 0.9 & `IMPACT`=="HIGH" ~ "I-B",
+    #                       AF > 0.2 & AF < 0.9 & `IMPACT`=="MODERATE" ~ "II-A")) %>%
+    #mutate(CLASS=if_else(str_detect(HGVSp,"(Ala[0-9]*Gly$)|(Gly[0-9]*Ala$)|(Ser[0-9]*Thr$)|(Thr[0-9]*Ser$)|(Ile[0-9]*Leu$)|(Leu[0-9]*Ile$)"),"II-B", CLASS)) %>%
+    arrange(`IMPACT`,`Hugo_Symbol`,`Chromosome`, `Start_Position`)
+ 
+  
+  write.table(narrow_maf, paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/maf/",base[[1]][1], "_no_filter.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+  
+  write.table(short_maf, paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/maf/",base[[1]][1], "_relexed_filter.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+  
+}
+```
+
+
+
+## cpsr tumor-normal discordance
+  
+
+```
+# pair information
+#1_Gp2d_parents_P2_S1	2_Gp2d_BBO-12114_S2
+#1_Gp2d_parents_P2_S1	3_Gp2d_2um_BBO-11818-5_S3
+#2_MiaPaca_S2	5_Miapaca-2_3um_AMG510_S5
+#1_SW620_S1	4_SW620_BBO-11818-5_S4
+#3_NCI_H358_S3	6_H358-3um-BBO-8520_S6
+
+data_files <- list.files("/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/", pattern = "*.cpsr.grch38_filter.txt")  
+
+Gp2d <- read.delim("/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/1_Gp2d_parents_P2_S1.cpsr.grch38_filter.txt",header = TRUE, sep = "\t")
+
+mia <- read.delim("/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/2_MiaPaca_S2.cpsr.grch38_filter.txt",header = TRUE, sep = "\t")
+
+SW620 <- read.delim("/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/1_SW620_S1.cpsr.grch38_filter.txt",header = TRUE, sep = "\t")
+
+H358 <- read.delim("/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/3_NCI_H358_S3.cpsr.grch38_filter.txt",header = TRUE, sep = "\t")
+
+for (ff in data_files){
+  print(ff)
+  base <- str_split(ff, ".cpsr.grch38_filter.txt" )
+  
+  ## read in data
+  tumor <- read.delim(paste0("/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/",base[[1]][1],".cpsr.grch38_filter.txt"),header = TRUE, sep = "\t")
+  
+  ## discordance
+  dis_SW <- tumor %>% left_join(SW620, by="VAR_ID")
+  dis_mia <- tumor %>% left_join(mia, by="VAR_ID")
+  dis_Gp <- tumor %>% left_join(Gp2d, by="VAR_ID")
+  dis_H358 <- tumor %>% left_join(H358, by="VAR_ID")
+  
+  write.table(dis_SW, paste0("/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/",base[[1]][1],".no_SW620.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+  write.table(dis_mia, paste0("/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/",base[[1]][1],".no_mia.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+  
+  write.table(dis_Gp, paste0("/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/",base[[1]][1],".no_Gp2d.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+  write.table(dis_H358, paste0("/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/",base[[1]][1],".no_H358.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+  
+  
+}  
+```
+
+## selecet pathogenic variants in CPSR
+
+```{}
+data_files <- list.files("/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/", pattern = "*_IGV.txt")  
+for (ff in data_files){
+  print(ff)
+  base <- str_split(ff, "_IGV.txt" )
+  variant <- read.delim(paste0("/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/",ff),header = TRUE, sep = "\t")
+ 
+  
+  variant_pathogenic <- variant %>%
+    filter(grepl("Pathogenic", FINAL_CLASSIFICATION.x, ignore.case = TRUE)) %>%
+    filter(!is.na(`SYMBOL.y`)) %>%
+    select(c(`SYMBOL.x` ,`CHROM.x`,`POS.x`,`DBSNP.x`,`GENOTYPE.x`,`PROTEIN_CHANGE.x`,`FINAL_CLASSIFICATION.x`)) %>%
+    arrange(`SYMBOL.x`,`CHROM.x`) 
+ 
+  colnames(variant_pathogenic) <- c("GENE","CHROM","POS","DBSNP","GENOTYPE","PROTEIN_CHANGE","CLINVAR")
+  write.table(variant_pathogenic, paste0("/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/",base[[1]][1],"_pathogenic.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)  
+}
+
+ 
+```
+
+## merge pcgr and maf
+
+
+```{}
+
+
+data_files <- list.files("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/pcgr_outputs/", pattern = "*.pcgr_acmg.grch38_nofilter.txt")  
+for (ff in data_files){
+  print(ff)
+  base <- str_split(ff, ".pcgr_acmg.grch38_nofilter.txt" )
+  
+  ## read in data
+  
+  pcgr_Tie123 <- read.delim(paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/pcgr_outputs/",base[[1]][1],".pcgr_acmg.grch38_nofilter.txt"),header = TRUE, sep = "\t")
+  
+  maf_filtered <- read.delim(paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/maf/",base[[1]][1],"_relexed_filter.txt"), header = TRUE, sep = "\t")
+   
+  # get the same format of ID, for indel pcgr count position differently
+  pcgr_Tie123 <- pcgr_Tie123 %>% 
+    mutate(Pos1=ifelse(str_count(REF)>1, as.double(`POS`)+1, `POS`))%>%
+    mutate(ID=str_c("chr",`CHROM`,"_",`Pos1`))
+  
+  maf_filtered <- maf_filtered %>% mutate(ID=str_c(`Chromosome`,"_",`Start_Position`))
+  
+  #  join
+  maf_pcgr <- maf_filtered %>% left_join(pcgr_Tie123, by="ID") %>% select(-c(`SYMBOL`,`CHROM`,`POS`, `Pos1`)) %>%
+    mutate(CLASS=case_when(str_detect(`TIER_DESCRIPTION`,"Pathogenic")| str_detect(`TIER_DESCRIPTION`,"clinical significance")~ "class1",
+                                 str_detect(`TIER_DESCRIPTION`,'significance') & str_detect(`IMPACT`,"HIGH")~ "class2",
+                                 str_detect(`TIER_DESCRIPTION`,'significance') & str_detect(`SIFT`,"deleterious") & str_detect(`IMPACT`,"MODERATE") ~ "class3",
+                                 str_detect(`TIER_DESCRIPTION`,'significance') & `AF` > 0.15 ~ 'class4',
+                                 ((str_detect(`SIFT`,'deleterious') & str_detect(`IMPACT`,'MODERATE')) | str_detect(`IMPACT`,'HIGH')) &`AF` > 0.15 ~ "class5",
+                                 TRUE~"class6")) %>%
+    filter(`CLASS`!= "class6") %>%
+    arrange(`CLASS`,`Hugo_Symbol`) 
+
+   
+  write.table(maf_pcgr, paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/maf/",base[[1]][1],".merged_relax_filter_pcgr_annotated_short.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+  
+  
+  } 
+```
+
+
+## merge cpsr and maf
+
+
+```{}
+
+
+data_files <- list.files("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/CPSR_outputs/", pattern = "*.cpsr.grch38_filter.txt")  
+for (ff in data_files){
+  print(ff)
+  base <- str_split(ff, ".cpsr.grch38_filter.txt" )
+  
+  ## read in data
+  
+  cpsr_class54 <- read.delim(paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/CPSR_outputs/",base[[1]][1],".cpsr.grch38_filter.txt"),header = TRUE, sep = "\t")
+  
+  maf_filtered <- read.delim(paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/maf/",base[[1]][1],"_no_filter.txt"), header = TRUE, sep = "\t")
+   
+  # get the same format of ID, for indel cpsr count position differently
+  cpsr_class54 <- cpsr_class54 %>% 
+    mutate(Pos1=ifelse(str_count(REF)>1, as.double(`POS`)+1, `POS`))%>%
+    mutate(ID=str_c("chr",`CHROM`,"_",`Pos1`))
+  
+  maf_filtered <- maf_filtered %>% mutate(ID=str_c(`Chromosome`,"_",`Start_Position`))
+  
+  #  join
+  cpsr_maf <- cpsr_class54 %>% full_join(maf_filtered, by="ID") 
+  
+
+
+   
+  write.table(cpsr_maf, paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Somatic_tumor_only/maf/",base[[1]][1],".merged_cpsr54_maf.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+  
+  } 
+```
+
+
+
+# IGV check
+
+move *.merged_relax_filter_pcgr_annotated_short.txt to Reports folder
+
+```{}
+setwd("/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/")
+data_files <- list.files("/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/", pattern = "*.merged_relax_filter_pcgr_annotated_short.txt")  
+
+for (ff in data_files) {
+  base <- str_split(ff, ".merged_relax_filter_pcgr_annotated_short.txt" )
+  print(base[[1]][1])
+  
+  maf_temp <- read.delim(paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/",base[[1]][1],".merged_relax_filter_pcgr_annotated_short.txt"), header = TRUE, sep = "\t") 
+  
+  maf_temp$IGV_Check <-c('unchecked')
+  write.table(maf_temp, paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/",base[[1]][1],".merged_relax_filter_pcgr_annotated_IGV.txt"), sep = "\t",row.names = FALSE, col.names = TRUE)
+}
+
+```
+
+## write report
+
+```{}
+setwd("/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/")
+data_files <- list.files("/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/", pattern = "*.merged_relax_filter_pcgr_annotated_IGV.txt")  
+
+for (ff in data_files) {
+  base <- str_split(ff, ".merged_relax_filter_pcgr_annotated_IGV.txt" )
+  print(base[[1]][1])
+  
+  maf_temp <- read.delim(paste0("/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/",base[[1]][1],".merged_relax_filter_pcgr_annotated_IGV.txt"), header = TRUE, sep = "\t") %>%
+    filter(grepl("real|unchecked", IGV_Check, ignore.case = TRUE)) %>%
+    filter(`CLASS` != "class6") %>%
+    select(c(`Hugo_Symbol`,	`Chromosome`,	`Start_Position`,`HGVSp`,`AF`,`IMPACT`,`CLASS`)) %>%
+    arrange(`CLASS`,`Hugo_Symbol`) 
+ 
+  colnames(maf_temp) <-c("GENE","CHROM",	"POS","HGVSp","AF","IMPACT","CLASS")
+    
+  # obtain sample name, file name, date
+  sample_name <- base[[1]][1]
+  print(sample_name)
+  file_name=paste0(base[[1]][1],".docx",collapse ="")
+  
+  today <- Sys.Date()
+  format(today, format="%B %d %Y")
+  print(today)
+  # open an empty docx file, write sample name
+  doc = read_docx()
+  prop1=fp_text(font.size = 12, bold = TRUE, font.family = "Times")
+  title1=fpar(ftext(sample_name, prop=prop1))
+  body_add_fpar(doc, title1)
+  
+  # write subtitle and date
+  body_add_par(doc, "Whole Exome report ")
+  body_add_par(doc, today)
+  body_add_par(doc, " ")
+  
+  # write method summary
+  body_add_par(doc, "Method Summary: ")
+  body_add_par(doc, "DNA was extracted using Qiagen all prep protocol. gDNA libraries from 200ng DNA was prepared and exons were captured using Agilent SureselectXT human all exon V8 protocol. Libraries were quantitated via Agilent TapeStation. Sequencing was performed on the Illumina NextSeq2000. Raw FastQ files were mapped using the Xavier 3.0 protocols for mutation detection. Single Nucleotide variants and insertions or deletions were identified, and a subset of calls filtered by quality, depth of coverage, and allele frequency were compiled into a variant list. A subset of the compiled variants was reviewed manually using the Integrated Genome Viewer software from the Broad Institute. Variant annotation tools including VEP, PCGR, CPSR, were used for variant classification.")
+  body_add_par(doc, " ")
+  
+  body_add_par(doc, "FastQ and BAM files are stored at smb://at-s-is2.ncifcrf.gov/ras-intl/static/Genomics/20240105_6parentalLines/")
+  body_add_par(doc, " ")
+  
+   # insert gene list
+  body_add_par(doc, "Gene list: ")
+  
+  f.table=qflextable(maf_temp)
+  set_table_properties(f.table, width = .5, layout = "autofit")
+  f.table=font(f.table,  fontname = "Times", part = "all")
+  f.table=fontsize(f.table, size = 10, part = "all")
+  # also set the table's header font as bold
+  f.table=bold(f.table, part = "header")
+  doc <- flextable::body_add_flextable(doc, 
+                                       value = f.table, 
+                                       align = "center" )
+  body_add_par(doc, " ")
+                                       
+                                    
+                                       
+                                       
+  body_add_par(doc, " ")
+  body_add_par(doc, " ")
+  body_add_par(doc, "Class1 – constitutes clinically significant mutations classified as pathogenic or likely pathogenic variants by CPSR and/or PCGR. AF>0.05.")
+  body_add_par(doc, " ")
+  body_add_par(doc, "Class2 - constitutes coding variants found in cancer-related genes which have uncertain significance based on CPSR and/or PCGR and are predicted to have high impacts by VEP. AF>0.05.")
+  body_add_par(doc, " ")
+  body_add_par(doc, "Class3 - constitutes coding variants found in cancer-related genes which have uncertain significance based on CPSR and/or PCGR and are predicted to have moderate deleterious impacts by VEP. AF>0.05.")
+  body_add_par(doc, " ")
+  body_add_par(doc, "Class4 - includes variants found in cancer-related genes have uncertain significance based on CPSR and/or PCGR but didn't have high or moderate deleterious impacts predicted by VEP. AF > 0.15. ")
+  body_add_par(doc, " ")
+  body_add_par(doc, "Class5 – includes variants are predicted to have moderate deleterious impact by VEP.  AF> 0.15. ")
+  body_add_par(doc, " ")
+  body_add_par(doc, " ")               
+  body_add_par(doc, "If AF is low, it could be the variant newly emerged in cell population.") 
+  body_add_par(doc, " ")
+  
+  # output docx file
+  print(doc, target=file_name)
+  
+}
+
+```
