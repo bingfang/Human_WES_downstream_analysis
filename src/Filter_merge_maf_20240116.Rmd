@@ -1,5 +1,5 @@
 ---
-title: "WES analysis of human drug-resistant cell lines"
+title: "WES analysis of human cell lines"
 author: "Bingfang Ruth Xu"
 date: "2024_0116"
 output: html_document
