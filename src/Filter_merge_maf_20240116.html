@@ -374,9 +374,12 @@ for mutation detection.</p>
 <p>For somatic tumor-normal pair analysis, single nucleotide variants
 (SNVs) and insertions or deletions (Indels) were identified by 5 callers
 including mutect, mutect2, strelka, verdict, and varson. The merged SNVs
-and Indels from 5 callers were annotated by pcgr and vep. Variants were
-classified based on pcgr and vep annotation. For class1-4, AF set as
-greater than 5%. For class 5 variants AF set as greater than 15%.</p>
+and Indels from 5 callers were annotated by pcgr, vep, and cravat with
+11 modules including clinvar, clinvar_acmg, clingen, dbsnp,
+polyphen2,cosmic, cosmic_gene, civic, civic_gene, cancer_hotspots,
+cancer_landscape. Variants were classified based on pcgr and vep
+annotation. For class1-4, AF set as greater than 5%. For class 5
+variants AF set as greater than 15%.</p>
 <p>For germline analysis, SNVs and Indels were identified by GATK4 and
 annotated by cpsr.</p>
 <p>The compiled variants was reviewed manually using the Integrated
@@ -436,7 +439,8 @@ for (ff in data_files){
 <div id="maf-filter" class="section level2">
 <h2>maf filter</h2>
 <p>input *.maf input from somatic_tumor_only/merged_somatic_variants/maf
-selected High or moderate variants, calculated AF</p>
+selected High or moderate variants, calculated AF relax filter: selected
+High or moderate impact variants, AF&gt;0.05, DP&gt;30</p>
 <pre><code>data_files &lt;- list.files(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Analysis/maf/&quot;, pattern = &quot;*.maf&quot;)  
 for (ff in data_files){
   print(ff)
@@ -451,7 +455,7 @@ for (ff in data_files){
   mutate(AF=round((`t_alt_count`/`t_depth`), digits = 2)) 
   narrow_maf$`HGVSp`=substring(narrow_maf$`HGVSp`, first=3) 
   
-  # relax filter: selected PASS, High or moderate variants, AF&gt;0.05, DP&gt;30
+  # relax filter: selected High or moderate variants, AF&gt;0.05, DP&gt;30
   short_maf &lt;- narrow_maf %&gt;%
     filter(`IMPACT`==&quot;HIGH&quot;|`IMPACT`==&quot;MODERATE&quot;) %&gt;%
     #filter(!(grepl(&#39;tolerate&#39;,`SIFT`))) %&gt;%
@@ -508,29 +512,10 @@ for (ff in data_files){
   
 }  </code></pre>
 </div>
-<div id="selecet-pathogenic-variants-in-cpsr" class="section level2">
-<h2>selecet pathogenic variants in CPSR</h2>
-<pre><code>data_files &lt;- list.files(&quot;/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/&quot;, pattern = &quot;*_IGV.txt&quot;)  
-for (ff in data_files){
-  print(ff)
-  base &lt;- str_split(ff, &quot;_IGV.txt&quot; )
-  variant &lt;- read.delim(paste0(&quot;/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/&quot;,ff),header = TRUE, sep = &quot;\t&quot;)
- 
-  
-  variant_pathogenic &lt;- variant %&gt;%
-    filter(grepl(&quot;Pathogenic&quot;, FINAL_CLASSIFICATION.x, ignore.case = TRUE)) %&gt;%
-    filter(!is.na(`SYMBOL.y`)) %&gt;%
-    select(c(`SYMBOL.x` ,`CHROM.x`,`POS.x`,`DBSNP.x`,`GENOTYPE.x`,`PROTEIN_CHANGE.x`,`FINAL_CLASSIFICATION.x`)) %&gt;%
-    arrange(`SYMBOL.x`,`CHROM.x`) 
- 
-  colnames(variant_pathogenic) &lt;- c(&quot;GENE&quot;,&quot;CHROM&quot;,&quot;POS&quot;,&quot;DBSNP&quot;,&quot;GENOTYPE&quot;,&quot;PROTEIN_CHANGE&quot;,&quot;CLINVAR&quot;)
-  write.table(variant_pathogenic, paste0(&quot;/Users/xubr/local_projects/20231017_6drugRes/germline_1101run/cpsr_vcf/&quot;,base[[1]][1],&quot;_pathogenic.txt&quot;), sep = &quot;\t&quot;,row.names = FALSE, col.names = TRUE)  
-}
-
- </code></pre>
-</div>
 <div id="merge-pcgr-and-maf" class="section level2">
 <h2>merge pcgr and maf</h2>
+<p>Implement classification and filter: For class1-4, AF set as greater
+than 5%. For class 5 variants AF set as greater than 15%.</p>
 <pre><code>
 
 data_files &lt;- list.files(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Analysis/pcgr_outputs/&quot;, pattern = &quot;*.pcgr_acmg.grch38_nofilter.txt&quot;)  
@@ -568,6 +553,41 @@ for (ff in data_files){
   
   } </code></pre>
 </div>
+<div id="merge-cravat-and-maf" class="section level2">
+<h2>merge cravat and maf</h2>
+<pre><code>data_files &lt;- list.files(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Analysis/oc_local/&quot;, pattern = &quot;*.FINAL.norm.vep.vcf.xlsx&quot;)  
+for (ff in data_files){
+  print(ff)
+  base &lt;- str_split(ff, &quot;.FINAL.norm.vep.vcf.xlsx&quot; )
+  
+  ## read in data
+  
+  cravat &lt;- read_excel(paste0(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Analysis/oc_local/&quot;,base[[1]][1],&quot;.FINAL.norm.vep.vcf.xlsx&quot;),col_names=TRUE, sheet=2, skip=1)
+  
+  cravat_narrow &lt;- cravat %&gt;% select(c(`Chrom...2`, `Position`, `Gene`, `Diseases`, `Cancer Types`,`Class`, `Disease`, `Classification`, `Clinical Significance`, `Disease Names`,`Biological Process`)) %&gt;% 
+     mutate(ID=str_c(`Chrom...2`,&quot;_&quot;,`Position`))
+  print(colnames(cravat_narrow))
+  colnames(cravat_narrow) &lt;-c(&quot;Chrom...2&quot;, &quot;Position&quot;, &quot;Gene&quot;, &quot;Civic.Diseases&quot;, &quot;Cancer Types&quot;, &quot;cancer_landscope_Class&quot;, &quot;Clingen_Disease&quot;, &quot;clingen_Classification&quot;, &quot;clinvar_Clinical Significance&quot;, &quot;clinvar_Disease Names&quot;, &quot;Biological Process&quot;, &quot;ID&quot;)
+  
+  
+  maf_pcgr &lt;- read.delim(paste0(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Analysis/maf/&quot;,base[[1]][1],&quot;.merged_relax_filter_pcgr_annotated_short.txt&quot;), header = TRUE, sep = &quot;\t&quot;)
+  #maf_filtered &lt;- read.delim(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Analysis/maf/1_miapaca2_3um_MRTX849_S1.merged_relax_filter_pcgr_annotated_short.txt&quot;, header = TRUE, sep = &quot;\t&quot;)
+  maf_pcgr &lt;- maf_pcgr %&gt;% mutate(ID=str_c(`Chromosome`,&quot;_&quot;,`Start_Position`))
+  
+  
+  
+  #  join
+  maf_pcgr_cravat &lt;- maf_pcgr %&gt;% left_join(cravat_narrow, by=&quot;ID&quot;) %&gt;% select(-c(`Chrom...2`, `Position`, `Gene`)) 
+    
+
+   
+  write.table(maf_pcgr_cravat, paste0(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Analysis/maf/&quot;,base[[1]][1],&quot;.merged_relax_filter_pcgr_cravat_annotated_short.txt&quot;), sep = &quot;\t&quot;,row.names = FALSE, col.names = TRUE)
+  
+  
+  } 
+
+ </code></pre>
+</div>
 <div id="merge-cpsr-and-maf" class="section level2">
 <h2>merge cpsr and maf</h2>
 <pre><code>
@@ -602,33 +622,33 @@ for (ff in data_files){
   
   } </code></pre>
 </div>
-<div id="igv-check" class="section level1">
-<h1>IGV check</h1>
+<div id="prepare-for-igv-check" class="section level1">
+<h1>prepare for IGV check</h1>
 <p>move *.merged_relax_filter_pcgr_annotated_short.txt to Reports
 folder</p>
 <pre><code>setwd(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/&quot;)
-data_files &lt;- list.files(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/&quot;, pattern = &quot;*.merged_relax_filter_pcgr_annotated_short.txt&quot;)  
+data_files &lt;- list.files(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/&quot;, pattern = &quot;*.merged_relax_filter_pcgr_cravat_annotated_short.txt&quot;)  
 
 for (ff in data_files) {
-  base &lt;- str_split(ff, &quot;.merged_relax_filter_pcgr_annotated_short.txt&quot; )
+  base &lt;- str_split(ff, &quot;.merged_relax_filter_pcgr_cravat_annotated_short.txt&quot; )
   print(base[[1]][1])
   
-  maf_temp &lt;- read.delim(paste0(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/&quot;,base[[1]][1],&quot;.merged_relax_filter_pcgr_annotated_short.txt&quot;), header = TRUE, sep = &quot;\t&quot;) 
+  maf_temp &lt;- read.delim(paste0(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/&quot;,base[[1]][1],&quot;.merged_relax_filter_pcgr_cravat_annotated_short.txt&quot;), header = TRUE, sep = &quot;\t&quot;) 
   
   maf_temp$IGV_Check &lt;-c(&#39;unchecked&#39;)
-  write.table(maf_temp, paste0(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/&quot;,base[[1]][1],&quot;.merged_relax_filter_pcgr_annotated_IGV.txt&quot;), sep = &quot;\t&quot;,row.names = FALSE, col.names = TRUE)
+  write.table(maf_temp, paste0(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/&quot;,base[[1]][1],&quot;.merged_relax_filter_pcgr_cravat_annotated_IGV.txt&quot;), sep = &quot;\t&quot;,row.names = FALSE, col.names = TRUE)
 }
 </code></pre>
 <div id="write-report" class="section level2">
 <h2>write report</h2>
 <pre><code>setwd(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/&quot;)
-data_files &lt;- list.files(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/&quot;, pattern = &quot;*.merged_relax_filter_pcgr_annotated_IGV.txt&quot;)  
+data_files &lt;- list.files(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/&quot;, pattern = &quot;*.merged_relax_filter_pcgr_cravat_annotated_IGV.txt&quot;)  
 
 for (ff in data_files) {
-  base &lt;- str_split(ff, &quot;.merged_relax_filter_pcgr_annotated_IGV.txt&quot; )
+  base &lt;- str_split(ff, &quot;.merged_relax_filter_pcgr_cravat_annotated_IGV.txt&quot; )
   print(base[[1]][1])
   
-  maf_temp &lt;- read.delim(paste0(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/&quot;,base[[1]][1],&quot;.merged_relax_filter_pcgr_annotated_IGV.txt&quot;), header = TRUE, sep = &quot;\t&quot;) %&gt;%
+  maf_temp &lt;- read.delim(paste0(&quot;/Users/xubr/local_projects/WES_downstrean_analysis_human/Reports/&quot;,base[[1]][1],&quot;.merged_relax_filter_pcgr_cravat_annotated_IGV.txt&quot;), header = TRUE, sep = &quot;\t&quot;) %&gt;%
     filter(grepl(&quot;real|unchecked&quot;, IGV_Check, ignore.case = TRUE)) %&gt;%
     filter(`CLASS` != &quot;class6&quot;) %&gt;%
     select(c(`Hugo_Symbol`, `Chromosome`,   `Start_Position`,`HGVSp`,`AF`,`IMPACT`,`CLASS`)) %&gt;%
@@ -657,7 +677,7 @@ for (ff in data_files) {
   
   # write method summary
   body_add_par(doc, &quot;Method Summary: &quot;)
-  body_add_par(doc, &quot;DNA was extracted using Qiagen all prep protocol. gDNA libraries from 200ng DNA was prepared and exons were captured using Agilent SureselectXT human all exon V8 protocol. Libraries were quantitated via Agilent TapeStation. Sequencing was performed on the Illumina NextSeq2000. Raw FastQ files were mapped using the Xavier 3.0 protocols for mutation detection. Single Nucleotide variants and insertions or deletions were identified, and a subset of calls filtered by quality, depth of coverage, and allele frequency were compiled into a variant list. A subset of the compiled variants was reviewed manually using the Integrated Genome Viewer software from the Broad Institute. Variant annotation tools including VEP, PCGR, CPSR, were used for variant classification.&quot;)
+  body_add_par(doc, &quot;DNA was extracted using Qiagen all prep protocol. gDNA libraries from 200ng DNA was prepared and exons were captured using Agilent SureselectXT human all exon V8 protocol. Libraries were quantitated via Agilent TapeStation. Sequencing was performed on the Illumina NextSeq2000. Raw FastQ files were mapped using the Xavier 3.0 protocols for mutation detection. Single Nucleotide variants and insertions or deletions were identified, and a subset of calls filtered by quality, depth of coverage, and allele frequency were compiled into a variant list. A subset of the compiled variants was reviewed manually using the Integrated Genome Viewer software from the Broad Institute. Variant annotation tools including VEP, PCGR, CPSR,and cravat were used for variant classification.&quot;)
   body_add_par(doc, &quot; &quot;)
   
   body_add_par(doc, &quot;FastQ and BAM files are stored at smb://at-s-is2.ncifcrf.gov/ras-intl/static/Genomics/20240105_6parentalLines/&quot;)

@@ -55,6 +55,12 @@ xavier (v2.0)
 
 # examples
 
+./xavier run --input /data/xubr/fastq_2nd_15MEF/*.R?.fastq.gz --output /data/xubr/out_15MEF_0119 --genome mm10 --targets ./S0276129_ID_Regions_mm10.bed --pairs /data/xubr/XAVIER/pairs.tsv --mode slurm --runmode init (dryrun, run)
+
+./xavier run --input /data/xubr/fastq_20240110/*.R?.fastq.gz --output /data/xubr/out_6hRes_0116 --genome hg38 --targets ./S33266340_Covered_hg38.bed --pairs /data/xubr/XAVIER/pairs.tsv --mode slurm --runmode init (dryrun, run)
+
+./xavier run --input /data/xubr/fastq_20240110/*.R?.fastq.gz --output /data/xubr/out_6hRes_0118 --genome hg38 --targets ./S33266340_Covered_hg38.bed --pairs /data/xubr/XAVIER/pairs.tsv --cnv --mode slurm --runmode init (dryrun, run)
+
 ./xavier run --input /data/xubr/fastq_parental/*.R?.fastq.gz --output /data/xubr/out_parental_1221 --genome hg38 --targets ./S33266340_Covered_hg38.bed --mode slurm --runmode init (dryrun, run)
 
 ./xavier run --input /data/xubr/fastq_res/*.R?.fastq.gz --output /data/xubr/Res_1108 --genome hg38 --targets ./S33266340_Covered_hg38.bed  --pairs /data/xubr/XAVIER/pairs.tsv --cnv --mode slurm --runmode init (dryrun, run)

@@ -78,10 +78,16 @@ done
 CPSR expects a germline VCF with a single sample column, and input VCF is properly compressed and indexed
 
 ```
+library(tidyverse)
+vcf <- read.delim("/Users/xubr/local_projects/master_PCGR/PCGR/inputs/joint.hard-filtered.vcf", skip=3423, header = TRUE, sep = "\t") 
+vcf_col10 <-vcf %>% select(c(1:10))
+  colnames(vcf_col10)
+  
+write.table(vcf_col10, paste0("/Users/xubr/local_projects/master_PCGR/PCGR/inputs/joint.hard-filtered_10col.vcf"), sep = "\t",row.names = FALSE, col.names = TRUE)
 
 cd /Users/xubr/local_projects/master_PCGR/PCGR/pcgr
 
-docker container run -it --rm -v /Users/xubr/local_projects/master_PCGR/PCGR/pcgr_data:/root/pcgr_data -v /Users/xubr/local_projects/master_PCGR/PCGR/inputs:/root/inputs -v /Users/xubr/local_projects/master_PCGR/PCGR/outputs:/root/outputs sigven/pcgr:1.0.3 cpsr --input_vcf "/root/inputs/raw_variants.vcf.gz" --pcgr_dir "/root/pcgr_data" --output_dir "/root/outputs" --genome_assembly "grch38" --sample_id "germline" --panel_id 0 --no_docker 
+docker container run -it --rm -v /Users/xubr/local_projects/master_PCGR/PCGR/pcgr_data:/root/pcgr_data -v /Users/xubr/local_projects/master_PCGR/PCGR/inputs:/root/inputs -v /Users/xubr/local_projects/master_PCGR/PCGR/outputs:/root/outputs sigven/pcgr:1.0.3 cpsr --input_vcf "/root/inputs/joint.hard-filtered_10col.vcf" --pcgr_dir "/root/pcgr_data" --output_dir "/root/outputs" --genome_assembly "grch38" --sample_id "germline" --panel_id 0 --no_docker 
 
 
 ```

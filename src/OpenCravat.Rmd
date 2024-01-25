@@ -32,11 +32,15 @@ oc run  --mp 1 ./3_NCI_H358_S3.germline.vcf.gz -l hg38.
 # run a subset of the annotators that are installed, use the -a option:
 oc run --mp 1 ./3_NCI_H358_S3.germline.vcf.gz -l hg38 -a clinvar clingen dbsnp polyphen2 -t text excel
 
+oc run --mp 1 ./3_NCI_H358_S3.germline.vcf.gz -l hg38 -a clinvar clinvar_acmg clingen dbsnp polyphen2 cosmic_gene civic civic_gene cancer_hotspots -t text excel
+
 # mudule not installed yet
 oc run --mp 1 ./3_NCI_H358_S3.germline.vcf.gz -l hg38 -a cosmic cosmic_gene clinvar clinvar_acmg civic civic_gene clingen dbsnp polyphen2 -t text excel
 
 # tab delimited output use -t text or -t text excel for both
 oc run --mp 1 ./3_NCI_H358_S3.germline.vcf.gz -l hg38 -t text excel
+
+oc report 1_Gp2d_parents_P2_S1.FINAL.norm.vep.vcf.sqlite -t text excel
 ```
 
 Once the job is finished, the following files will be created:
@@ -82,3 +86,20 @@ do
     
 done
 ```
+
+
+1) allocate an interactive session with --tunnel option:
+sinteractive  --mem=16g  --gres=gpu:p100:1,lscratch:10 -c4 --tunnel
+Store the resulting PORT1 number and node_id.
+For example, I've got PORT1=42213 and node_id = cn4282
+2) run the oc gui command:
+oc gui --port=$PORT1
+3) on your local system, open new terminal and run the command:
+ssh -t -L $PORT1:localhost:$PORT1 biowulf "ssh -L $PORT1:localhost:$PORT $node_id"
+where $PORT1 and $node_id should be repladced by the actual values you stored.
+4) On the local system, navigate your browser to:
+http://localhost:$PORT1/submit/nocache/index.html
+where, again, $PORT1 should be replaced by the actual value you stored.
+
+4) On the local system, navigate your browser to:
+http://localhost:$PORT1/submit/nocache/index.html
